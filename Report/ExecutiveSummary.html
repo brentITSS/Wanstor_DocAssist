@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Document Change Check - Proof of Concept Overview</title>
+<style>
+  @page { size: A4; margin: 12mm 13mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 9.4pt; color: #1f2933; line-height: 1.35; margin: 0; }
+  h1 { font-size: 18pt; margin: 0; color: #0b3d63; }
+  h2 { font-size: 11.5pt; color: #0b3d63; margin: 10px 0 5px; padding-bottom: 3px; border-bottom: 1.5px solid #d4e3ef; }
+  p { margin: 0 0 6px; }
+  .sub { color: #52606d; font-size: 9.5pt; margin-top: 3px; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 3px solid #0b3d63; padding-bottom: 6px; }
+  .page-break { break-before: page; }
+
+  .flow { display: flex; align-items: stretch; margin: 6px 0 4px; }
+  .step { flex: 1; border: 1.5px solid #8fb3d1; border-radius: 7px; padding: 7px 5px; background: #f3f8fc; text-align: center; }
+  .step b { display: block; color: #0b3d63; font-size: 9pt; margin-bottom: 4px; }
+  .step span { font-size: 7.9pt; color: #3e4c59; display: block; margin-bottom: 2px; }
+  .step.core { flex: 1.8; background: #e6f0f9; border-color: #0b3d63; text-align: left; }
+  .step.core b { text-align: center; }
+  .step.core ol { margin: 2px 0 0 14px; padding: 0; font-size: 7.9pt; color: #3e4c59; }
+  .step.dh { background: #f4f0fa; border-color: #8e7cc3; }
+  .ref { display: inline-block; font-family: Consolas, monospace; font-size: 7.6pt; background: #fff; border: 1px dashed #8e7cc3; border-radius: 3px; padding: 0 3px; margin-top: 2px; white-space: nowrap; }
+  .step.ai { background: #fff6e5; border-color: #e0a12b; }
+  .step.out { background: #eaf7ee; border-color: #4caf6e; }
+  .arrow { width: 15px; display: flex; align-items: center; justify-content: center; color: #0b3d63; font-size: 14pt; font-weight: bold; }
+  .badges { margin: 4px 0; }
+  .step .badge, .badge { display: inline-block; font-size: 7.6pt; font-weight: 700; border-radius: 3px; padding: 1px 5px; margin: 1px; color: #fff; }
+  .pass { background: #2e8b57; } .partial { background: #d98e04; } .fail { background: #c0392b; }
+  .caption { font-size: 8.5pt; color: #52606d; text-align: center; }
+
+  .outcomes { display: flex; gap: 10px; margin-top: 6px; }
+  .outcomes div { flex: 1; border: 1px solid #d4dde5; border-radius: 6px; padding: 6px 8px; font-size: 9pt; }
+
+  .cols { columns: 2; column-gap: 22px; }
+  ul { margin: 0; padding-left: 16px; }
+  li { margin-bottom: 3px; break-inside: avoid; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 8.9pt; }
+  th, td { border: 1px solid #d4dde5; padding: 3px 7px; text-align: left; vertical-align: top; }
+  th { background: #0b3d63; color: #fff; font-weight: 600; }
+  td.days { text-align: center; white-space: nowrap; width: 80px; }
+  tr.total td { font-weight: 700; background: #e6f0f9; }
+  table.example { font-size: 8.6pt; }
+  .note { font-size: 8.6pt; color: #52606d; margin-top: 4px; }
+  .two { display: flex; gap: 22px; }
+  .two > div { flex: 1; }
+</style>
+</head>
+<body>
+
+<!-- ============ PAGE 1 ============ -->
+<header>
+  <div>
+    <h1>Document Change Check &ndash; Proof of Concept Overview</h1>
+    <div class="sub">Prototype findings and feasibility outlook for automatically verifying Data House updates</div>
+  </div>
+  <div class="sub">Draft &ndash; 9 October 2026</div>
+</header>
+
+<h2>Purpose</h2>
+<p>A worker submits a change request form, carrying a unique reference, to the <b>Data House (DH)</b>. When the DH has applied the update, it sends an email confirming the update and quoting that reference. The email starts a Power Automate flow, which uses the reference to find the original change request and sends it with the updated (live) document to an Azure Function. The function&rsquo;s <b>Change Check</b> method uses Azure OpenAI (GPT-4o, which can read images) to find every requested change, then checks whether each one appears in the live document. It returns an overall outcome and a line-by-line breakdown of each change.</p>
+<p>This replaces a manual side-by-side comparison of the two documents. Every DH confirmation is independently checked within moments of arriving, giving a consistent, auditable answer and highlighting any changes that still need attention.</p>
+
+<h2>How it works</h2>
+<div class="flow">
+  <div class="step dh"><b>1. Change request</b><span>Worker submits the change request form to the DH</span><span class="ref">Ref: CR-12345</span><span>Copy stored in Dataverse, SharePoint or SQL</span></div>
+  <div class="arrow">&#10140;</div>
+  <div class="step dh"><b>2. Trigger</b><span>DH applies the update and emails a confirmation</span><span class="ref">Ref: CR-12345</span></div>
+  <div class="arrow">&#10140;</div>
+  <div class="step"><b>3. Power Automate</b><span>Reads the reference from the email</span><span>Finds the matching change request and the live document</span></div>
+  <div class="arrow">&#10140;</div>
+  <div class="step core"><b>4. Azure Function &ndash; Change Check</b>
+    <ol>
+      <li>Reads both files (PDF, Word, RTF, Excel, images)</li>
+      <li>Extracts text, comment bubbles and arrow targets</li>
+      <li>Sends both documents to Azure OpenAI</li>
+      <li>Checks each result against the exact text of the live document</li>
+      <li>Calculates the outcome, % complete and confidence</li>
+    </ol>
+  </div>
+  <div class="arrow">&#8644;</div>
+  <div class="step ai"><b>Azure OpenAI</b><span>GPT-4o (UK South)</span><span>Reads the marked-up request visually and compares it with the live document</span></div>
+  <div class="arrow">&#10140;</div>
+  <div class="step out"><b>5. Result</b><span>Returned to the flow</span>
+    <div class="badges"><span class="badge pass">PASS</span><span class="badge partial">PARTIAL</span><span class="badge fail">FAIL</span></div>
+    <span>Audit record and notification</span><span>Low confidence: human review</span></div>
+</div>
+<div class="caption">The flow runs automatically for every DH confirmation email. Results with low confidence are routed to a person for human-in-the-loop review.</div>
+
+<div class="outcomes">
+  <div><span class="badge pass">PASS</span> Every requested change has been applied correctly.</div>
+  <div><span class="badge partial">PARTIAL</span> At least one change has been applied and at least one has not.</div>
+  <div><span class="badge fail">FAIL</span> None of the requested changes have been applied correctly.</div>
+</div>
+
+<h2>Capabilities</h2>
+<div class="cols">
+<ul>
+  <li><b>Any common format:</b> PDF, Word (.docx), RTF, Excel, PowerPoint, text and images (PNG, JPG).</li>
+  <li><b>Reads mark-ups:</b> comment bubbles, arrows, text boxes, handwriting and &ldquo;should be&rdquo; notes, across every page.</li>
+  <li><b>Counts only explicit requests:</b> printed or unchanged fields are not treated as changes, and red or black redaction bars are ignored.</li>
+  <li><b>Handles each kind of edit:</b> replacements, additions (for example, appending words to a sentence) and removals.</li>
+  <li><b>Per-change detail:</b> field, old value, new value, expected text, result and a note explaining any failure.</li>
+  <li><b>Exact matching:</b> spacing, spelling and punctuation must match (&ldquo;AR1 2AO&rdquo; is not &ldquo;AR12AO&rdquo;, and &ldquo;United Kingdon&rdquo; fails), and the value must be in the right place, not elsewhere in the document.</li>
+  <li><b>Vague requests flagged:</b> comments such as &ldquo;change this&rdquo; are reported as <i>Unidentified Field Changes</i> for a person to review.</li>
+  <li><b>Consistent outcome:</b> the outcome and the % of changes completed are calculated by code, not by the AI.</li>
+  <li><b>Human in the loop:</b> each result has a 0&ndash;100 confidence score with a reason, lowered automatically when the code corrects the AI. Low-confidence and unidentified results are sent to a person for review.</li>
+  <li><b>Document reference:</b> the policy or reference number is taken from the document or file name (&ldquo;Not Found&rdquo; if there is none).</li>
+  <li><b>Cost visibility:</b> each run reports the model used, the tokens used and an estimated cost.</li>
+  <li><b>Secure:</b> calls require a function key, the AI key is stored only in Azure settings, and data is processed in UK South.</li>
+</ul>
+</div>
+
+<!-- ============ PAGE 2 ============ -->
+<div class="page-break"></div>
+
+<h2>Linking the DH confirmation to the change request</h2>
+<p>Each DH confirmation email must be matched to the change request it relates to. This is done with a <b>unique change reference</b>:</p>
+<ul>
+  <li><b>Raised once:</b> each change request form is given a unique reference (for example <span class="ref">CR-12345</span>) when it is submitted, and a copy is stored under that reference in Dataverse, SharePoint or SQL.</li>
+  <li><b>Quoted back by the DH:</b> the DH includes the same reference in the confirmation email, ideally in a fixed format in the subject line.</li>
+  <li><b>Matched by the flow:</b> the flow reads the reference from the email, finds the matching change request and the live document, then runs the Change Check.</li>
+  <li><b>Exceptions handled:</b> if the reference is missing or doesn&rsquo;t match a request, the flow records an exception and alerts the team for manual review instead of running the check.</li>
+  <li><b>Double-checked:</b> the Change Check also reports the policy or document reference (docRef) it finds, which the flow can compare with the request as a second safeguard.</li>
+</ul>
+<p class="note">The reference format, and how the DH quotes it and supplies the updated document (as an email attachment or in a shared location), need to be agreed with the DH before build.</p>
+
+<h2>Example result</h2>
+<p>A motor policy schedule with three requested changes, of which one was applied correctly:</p>
+<table class="example">
+  <tr><th>Field</th><th>Old value</th><th>New value</th><th>Live value</th><th>Result</th><th>Notes</th></tr>
+  <tr><td>Vehicle registration</td><td>KX19 LMN</td><td>AR19 XYZ</td><td>AR19XYZ</td><td><span class="badge fail">FAIL</span></td><td>The space is missing.</td></tr>
+  <tr><td>Country</td><td>France</td><td>United Kingdom</td><td>United Kingdon</td><td><span class="badge fail">FAIL</span></td><td>Updated, but misspelt.</td></tr>
+  <tr><td>Postcode</td><td>CF10 1AA</td><td>CF10 2BB</td><td>CF10 2BB</td><td><span class="badge pass">PASS</span></td><td>Applied as requested.</td></tr>
+</table>
+<p class="note">Overall: <span class="badge partial">PARTIAL</span>, 33% of changes completed, with a document reference, confidence score, tokens used and estimated cost. Values are illustrative.</p>
+
+<h2>Estimated effort</h2>
+<table>
+  <tr><th>Activity</th><th>Days</th></tr>
+  <tr><td><b>Prerequisites:</b> access, Azure OpenAI quota, Power Automate Premium licences, data policy approval for the custom connector, and agreeing the change reference format with the DH</td><td class="days">0.5 &ndash; 1</td></tr>
+  <tr><td><b>Azure set-up:</b> Azure OpenAI resource and model, function app, settings, publish and smoke test</td><td class="days">0.5 &ndash; 1</td></tr>
+  <tr><td><b>Power Automate:</b> custom connector and connection, email trigger, reading the reference, matching it to the change request, exception handling</td><td class="days">1.5 &ndash; 2</td></tr>
+  <tr><td><b>Change audit records:</b> results table in Dataverse, SharePoint or SQL with one row per change, outcome linked to the change request, human review queue for low-confidence results, notifications</td><td class="days">1.5 &ndash; 2</td></tr>
+  <tr><td><b>Testing and validation:</b> a range of real documents (PDF, RTF, Word, scans, multi-page and redacted), with prompt tuning and fixes</td><td class="days">2</td></tr>
+  <tr><td><b>Handover:</b> documentation and walkthrough</td><td class="days">0.5</td></tr>
+  <tr class="total"><td>Total</td><td class="days">6.5 &ndash; 8.5 days</td></tr>
+</table>
+<p class="note">Time spent waiting for IT approvals or quota increases is not included.</p>
+
+<div class="two">
+<div>
+<h2>Running costs</h2>
+<ul>
+  <li><b>Azure OpenAI:</b> pay per use. Typically a few US cents per check, and each result reports its own estimated cost.</li>
+  <li><b>Azure Functions:</b> consumption plan, likely to stay within the free monthly allowance at expected volumes.</li>
+  <li><b>Power Automate:</b> a Premium licence is required for the custom connector.</li>
+</ul>
+</div>
+<div>
+<h2>Risks and considerations</h2>
+<ul>
+  <li>The process depends on the DH quoting the change reference correctly; unmatched emails go to manual review.</li>
+  <li>AI confidence is a self-assessment, so the threshold for human review should be set during testing.</li>
+  <li>Exact-text checks need a live document with readable text, not a scanned image.</li>
+  <li>Upkeep: .NET 8 support ends in November 2026 and GPT-4o retires in 2027; both need upgrading.</li>
+</ul>
+</div>
+</div>
+</body>
+</html>
